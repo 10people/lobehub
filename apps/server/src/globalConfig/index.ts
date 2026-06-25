@@ -6,6 +6,7 @@ import { isDesktop } from '@/const/version';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { fileEnv } from '@/envs/file';
+import { gatewayEnv } from '@/envs/gateway';
 import { imageEnv } from '@/envs/image';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
@@ -127,6 +128,12 @@ export const getServerGlobalConfig = async () => {
 
     // Expose Agent Gateway URL to client (used by hetero agents; also required for queue mode)
     ...(appEnv.AGENT_GATEWAY_URL ? { agentGatewayUrl: appEnv.AGENT_GATEWAY_URL } : undefined),
+
+    // Expose Device Gateway URL so self-hosted instances can distribute their
+    // custom gateway address to connected Electron desktop clients.
+    ...(gatewayEnv.DEVICE_GATEWAY_URL
+      ? { deviceGatewayUrl: gatewayEnv.DEVICE_GATEWAY_URL }
+      : undefined),
 
     image: cleanObject({
       defaultImageNum: imageEnv.AI_IMAGE_DEFAULT_IMAGE_NUM,

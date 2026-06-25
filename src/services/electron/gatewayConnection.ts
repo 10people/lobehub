@@ -24,6 +24,10 @@ class GatewayConnectionService {
   setDeviceName = async (name: string) => {
     return ensureElectronIpc().gatewayConnection.setDeviceName({ name });
   };
+
+  setGatewayUrl = async (url: string) => {
+    return ensureElectronIpc().gatewayConnection.setGatewayUrl({ url });
+  };
 }
 
 export const gatewayConnectionService = new GatewayConnectionService();

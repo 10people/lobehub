@@ -60,6 +60,12 @@ export interface GlobalServerConfig {
   agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
+  /**
+   * Device Gateway URL for Electron desktop connections.
+   * When set by a self-hosted server, connected desktop clients will
+   * automatically use this URL instead of the default production gateway.
+   */
+  deviceGatewayUrl?: string;
   disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;
   enableComposio?: boolean;

@@ -266,6 +266,35 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return { success: true };
   }
 
+  /**
+   * Update the Device Gateway URL in the local store.
+   * Called by the renderer when the connected server's config includes a
+   * `deviceGatewayUrl` (self-hosted deployments that run their own gateway).
+   * If the gateway is currently active, reconnects immediately with the new URL.
+   */
+  @IpcMethod()
+  async setGatewayUrl(params: {
+    url: string;
+  }): Promise<{ reconnected: boolean; success: boolean }> {
+    const { url } = params;
+    const currentUrl = this.app.storeManager.get('gatewayUrl');
+    if (url === currentUrl) return { reconnected: false, success: true };
+
+    this.app.storeManager.set('gatewayUrl', url);
+
+    const gatewayEnabled = this.app.storeManager.get('gatewayEnabled');
+    const status = this.service.getStatus();
+    const isActive = gatewayEnabled && status !== 'disconnected';
+
+    if (isActive) {
+      await this.service.disconnect();
+      await this.service.connect();
+      return { reconnected: true, success: true };
+    }
+
+    return { reconnected: false, success: true };
+  }
+
   // ─── Auto Connect ───
 
   private async tryAutoConnect() {

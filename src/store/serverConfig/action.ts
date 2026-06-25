@@ -1,3 +1,4 @@
+import { getElectronIpc } from '@lobechat/electron-client-ipc';
 import { type SWRResponse } from 'swr';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
@@ -53,6 +54,12 @@ export class ServerConfigActionImpl {
             false,
             'initServerConfig',
           );
+          // Sync device gateway URL to Electron main process when running as desktop app.
+          // Self-hosted servers expose their gateway URL so clients use the right endpoint.
+          const { deviceGatewayUrl } = data.serverConfig;
+          if (deviceGatewayUrl) {
+            getElectronIpc()?.gatewayConnection.setGatewayUrl({ url: deviceGatewayUrl });
+          }
         },
       },
     );
