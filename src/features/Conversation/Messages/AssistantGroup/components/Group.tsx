@@ -5,6 +5,9 @@ import { memo, useMemo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type { OperationStatus } from '@/store/chat/slices/operation/types';
 import type { AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -20,7 +23,8 @@ import {
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import ProcessFold from './ProcessFold';
-import { type GroupRenderSegment, shouldFoldProcess, splitFinalAnswer } from './segments';
+import { countFoldedProcessSteps, shouldFoldProcess, splitFinalAnswer } from './segments';
+import type { GroupRenderSegment } from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 import WorkflowCollapse, { type WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
@@ -83,6 +87,7 @@ interface PartitionedBlocks {
 
 const ANSWER_DOM_ID_SUFFIX = '__answer';
 const WORKFLOW_DOM_ID_SUFFIX = '__workflow';
+const ACTIVE_OPERATION_STATUSES = new Set<OperationStatus>(['pending', 'paused', 'running']);
 
 const isEmptyBlock = (block: RenderableAssistantContentBlock) =>
   (!block.content || block.content === LOADING_FLAT) &&
@@ -398,6 +403,11 @@ const Group = memo<GroupChildrenProps>(
       messageStateSelectors.isMessageCollapsed(id)(s),
       messageStateSelectors.isAssistantGroupItemGenerating(id)(s),
     ]);
+    const hasActiveOperation = useChatStore((s) =>
+      operationSelectors
+        .getOperationsByMessage(id)(s)
+        .some((op) => ACTIVE_OPERATION_STATUSES.has(op.status)),
+    );
     const turnDurationMs = useConversationStore((s) => getTurnDurationMs(s.dbMessages, blocks));
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
     const lastBlockId = blocks.at(-1)?.id;
@@ -499,15 +509,19 @@ const Group = memo<GroupChildrenProps>(
       );
     };
 
-    // Codex-style turn folding: once a turn is finished and no longer the latest
-    // one, fold its whole process (reasoning + tools + intermediate prose) under
-    // a single "已处理 {duration}" header, leaving the final answer always
-    // visible. The latest / still-generating turn renders in full.
+    // Codex-style turn folding: once the turn's op has ended, fold its whole
+    // process (reasoning + tools + intermediate prose) under a single "已处理
+    // {duration}" header, leaving the final answer always visible. The latest
+    // turn folds only after a final answer exists; still-generating turns render
+    // in full.
     const { processSegments, finalSegments } = splitFinalAnswer(segments);
+    const processStepCount = countFoldedProcessSteps(processSegments);
     const foldProcess = shouldFoldProcess({
       enabled: enableProcessFold,
+      hasFinalAnswer: finalSegments.length > 0,
       isGenerating,
       isLatestItem,
+      operationEnded: !hasActiveOperation,
       processSegments,
     });
 
@@ -519,7 +533,7 @@ const Group = memo<GroupChildrenProps>(
         <Flexbox className={styles.container} gap={8}>
           {foldProcess ? (
             <>
-              <ProcessFold durationText={durationText} stepCount={blocks.length}>
+              <ProcessFold durationText={durationText} stepCount={processStepCount}>
                 <Flexbox gap={8}>
                   {processSegments.map((segment) =>
                     renderSegment(segment, segments.indexOf(segment)),

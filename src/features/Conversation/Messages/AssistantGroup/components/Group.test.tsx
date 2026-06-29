@@ -22,6 +22,16 @@ vi.mock('antd-style', () => ({
   }),
 }));
 
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/chat/slices/operation/selectors', () => ({
+  operationSelectors: {
+    getOperationsByMessage: () => () => [],
+  },
+}));
+
 // Mock the council list so importing Group doesn't pull in the AgentCouncil
 // render chain (→ shared-tool-ui inspectors → antd-style `keyframes`), which is
 // out of scope for this unit test.
