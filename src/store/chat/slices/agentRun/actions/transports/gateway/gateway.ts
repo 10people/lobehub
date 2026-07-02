@@ -4,7 +4,12 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
-import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  ConversationContext,
+  ExecAgentResult,
+  MessageMetadata,
+} from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
@@ -12,8 +17,7 @@ import { gatewayConnectionService } from '@/services/electron/gatewayConnection'
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -336,24 +340,11 @@ export class GatewayActionImpl {
     const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
       .chatConfig?.disableGatewayMode;
     const disableGatewayMode = agentDisableGatewayMode ?? defaultDisableGatewayMode;
-    const model = resolvedAgentId
-      ? agentByIdSelectors.getAgentModelById(resolvedAgentId)(agentState)
-      : undefined;
-    const provider = resolvedAgentId
-      ? agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(agentState)
-      : undefined;
-    // Example: Nano Banana supports image output but not function calling; Gateway would
-    // inject agent/tools context and run the wrong runtime instead of normal image output.
-    const supportToolUse =
-      !!model &&
-      !!provider &&
-      aiModelSelectors.isModelSupportToolUse(model, provider)(getAiInfraStoreState());
 
     return (
       !!serverConfig?.agentGatewayUrl &&
       !!serverConfig.enableGatewayMode &&
-      disableGatewayMode !== true &&
-      supportToolUse
+      disableGatewayMode !== true
     );
   };
 
@@ -381,7 +372,7 @@ export class GatewayActionImpl {
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
-    optimisticTopic?: { id: string; title: string };
+    optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
     /**
@@ -506,12 +497,14 @@ export class GatewayActionImpl {
       // Topic created successfully — now safe to clear the pending repo selection.
       if (context.agentId) consumePendingTopicRepos(context.agentId);
       if (optimisticTopic) {
+        const topicMetadata = optimisticTopic.metadata ?? initialTopicMetadata;
         this.#get().internal_replaceTopicId({
           agentId: context.agentId,
           groupId: context.groupId,
           nextId: result.topicId,
           previousId: optimisticTopic.id,
           value: {
+            ...(topicMetadata ? { metadata: topicMetadata } : {}),
             ...(context.groupId ? {} : { sessionId: context.agentId }),
             title: optimisticTopic.title,
           },

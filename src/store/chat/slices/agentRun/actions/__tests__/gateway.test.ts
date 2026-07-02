@@ -67,7 +67,6 @@ const mockRuntime = vi.hoisted(() => ({ isChatMode: false, isLocal: false }));
 const mockAgentStore = vi.hoisted(() => ({
   state: { activeAgentId: undefined, agentMap: {} } as any,
 }));
-const mockModelAbility = vi.hoisted(() => ({ supportToolUse: true }));
 
 vi.mock('@/const/version', async (importOriginal) => {
   const actual = await importOriginal<typeof ConstVersion>();
@@ -86,12 +85,6 @@ vi.mock('@/services/electron/gatewayConnection', () => ({
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => mockAgentStore.state }));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentModelById: (agentId: string) => (state: any) =>
-      state.agentMap?.[agentId]?.model ?? 'test-model',
-    getAgentModelProviderById: (agentId: string) => (state: any) =>
-      state.agentMap?.[agentId]?.provider ?? 'test-provider',
-  },
   agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
   chatConfigByIdSelectors: {
     getChatConfigById: (agentId: string) => (state: any) =>
@@ -99,13 +92,6 @@ vi.mock('@/store/agent/selectors', () => ({
     isChatModeById: () => () => mockRuntime.isChatMode,
     isLocalSystemEnabledById: () => () => mockRuntime.isLocal,
   },
-}));
-
-vi.mock('@/store/aiInfra', () => ({
-  aiModelSelectors: {
-    isModelSupportToolUse: () => () => mockModelAbility.supportToolUse,
-  },
-  getAiInfraStoreState: () => ({}),
 }));
 
 // ─── Mock Client Factory ───
@@ -163,7 +149,6 @@ function createTestAction() {
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
-    mockModelAbility.supportToolUse = true;
     mockUserDefaultConfig.disableGatewayMode = undefined;
     mockToolInterventionConfig.approvalMode = 'manual';
     mockToolInterventionConfig.allowList = [];
@@ -214,27 +199,6 @@ describe('GatewayActionImpl', () => {
         enableGatewayMode: true,
       });
       mockUserDefaultConfig.disableGatewayMode = true;
-
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
-    });
-
-    it('returns false when the model does not support tool calling', () => {
-      const { action } = createTestAction();
-      setServerConfig({
-        agentGatewayUrl: 'https://gateway.test.com',
-        enableGatewayMode: true,
-      });
-      mockAgentStore.state = {
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            chatConfig: {},
-            model: 'gemini-3.1-flash-lite-image',
-            provider: 'lobehub',
-          },
-        },
-      };
-      mockModelAbility.supportToolUse = false;
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
     });
@@ -746,6 +710,48 @@ describe('GatewayActionImpl', () => {
         value: {
           sessionId: 'agent-1',
           title: '666',
+        },
+      });
+    });
+
+    it('should keep optimistic topic metadata when replacing the placeholder topic id', async () => {
+      const { action, internalReplaceTopicId } = createExecuteTestAction();
+      const selectedRepo = 'https://github.com/lobehub/lobehub';
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: null, threadId: null, scope: 'main' },
+        message: 'Create a project topic',
+        optimisticTopic: {
+          id: 'tmp-topic',
+          metadata: { repos: [selectedRepo], workingDirectory: selectedRepo },
+          title: 'Create a project topic',
+        },
+      });
+
+      expect(internalReplaceTopicId).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: undefined,
+        nextId: 'topic-1',
+        previousId: 'tmp-topic',
+        value: {
+          metadata: { repos: [selectedRepo], workingDirectory: selectedRepo },
+          sessionId: 'agent-1',
+          title: 'Create a project topic',
         },
       });
     });
