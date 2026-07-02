@@ -1,3 +1,2 @@
 -- Custom SQL migration file, put your code below! --
--- Disable for deprecated on Neon db.
--- CREATE EXTENSION IF NOT EXISTS pg_search;
+CREATE EXTENSION IF NOT EXISTS pg_search;
